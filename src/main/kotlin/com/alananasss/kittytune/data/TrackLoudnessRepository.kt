@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 
 object TrackLoudnessRepository {
@@ -38,15 +40,18 @@ object TrackLoudnessRepository {
     fun scanTrackAsync(
         track: Track,
         url: String,
-        headers: Map<String, String> = emptyMap(),
         onComplete: ((TrackLoudnessInfo) -> Unit)? = null
     ) {
+        // JavaCV holds a process-wide codec lock while opening a grabber. A stalled
+        // background network scan therefore blocks playback start and release too.
+        // Scan completed local/downloaded/cache files; streams use live normalization.
+        val file = localLoudnessScanFile(url) ?: return
         if (getLoudness(track.id) != null) return
         if (activeScans.containsKey(track.id)) return
 
         val job = scope.launch {
             try {
-                val scanned = AudioScannerManager.scanStream(url, headers)
+                val scanned = AudioScannerManager.scanAudioFile(file)
                 if (scanned != null) {
                     saveLoudness(track.id, scanned.integratedLufs, scanned.truePeakDb)
                     withContext(Dispatchers.Main) {
@@ -95,4 +100,14 @@ object TrackLoudnessRepository {
             }
         } catch (_: Throwable) {}
     }
+}
+
+internal fun localLoudnessScanFile(source: String): File? {
+    if (source.startsWith("\\\\") || source.startsWith("//")) return null
+    val file = when {
+        source.startsWith("file:", ignoreCase = true) -> runCatching { File(URI(source)) }.getOrNull()
+        source.contains("://") -> null
+        else -> File(source)
+    }
+    return file?.takeIf { it.isFile && it.length() > 0 && !it.extension.equals("part", ignoreCase = true) }
 }

@@ -565,7 +565,10 @@ class AudioEngine {
                 adapter = HlsStreamAdapter(targetUrl, headers, ::reResolveUrl)
                 hlsAdapter = adapter
             }
-            return FFmpegFrameGrabber(adapter.getInputStream(startPositionMs)).apply {
+            // Seeking is implemented by reopening the adapter at a fragment, so JavaCV
+            // must not buffer/seek this InputStream. Its default seek callback reads to
+            // EOF to discover the size, downloading the whole track during start().
+            return FFmpegFrameGrabber(adapter.getInputStream(startPositionMs), 0).apply {
                 format = "mp4" // Fragments are ISOBMFF (mp4)
                 setOption("probesize", "32768") // 32KB is enough for MOOV atom + some audio
                 setOption("analyzeduration", "0")
@@ -621,6 +624,7 @@ class AudioEngine {
     }
 
     private fun recoverStream(
+        workerId: Long,
         oldGrabber: FFmpegFrameGrabber?,
         url: String,
         headers: Map<String, String>,
@@ -632,7 +636,9 @@ class AudioEngine {
         var currentUrlToTry = url
         var attempt = 0
 
-        while (!stopFlag && attempt < maxAttempts) {
+        // prepare() clears stopFlag for the replacement worker. A superseded worker
+        // must still stop recovering, or it can keep the codec lock ahead of the new track.
+        while (!stopFlag && activeWorkerId == workerId && attempt < maxAttempts) {
             attempt++
             Logger.e("AudioEngine", "Network recovery attempt $attempt at $resumePosMs ms...")
 
@@ -640,6 +646,7 @@ class AudioEngine {
             if (SignedUrl.isNetworkUrl(currentUrlToTry)) {
                 reResolveUrl(currentUrlToTry)?.let { currentUrlToTry = it }
             }
+            if (stopFlag || activeWorkerId != workerId) break
 
             // Every attempt that does not hand its grabber back must release it: the contexts are
             // native, and during an outage this loop runs every couple of seconds for as long as
@@ -648,6 +655,10 @@ class AudioEngine {
             try {
                 newG = createGrabber(currentUrlToTry, headers, resumePosMs)
                 newG.start()
+                if (stopFlag || activeWorkerId != workerId) {
+                    newG.releaseQuietly()
+                    break
+                }
                 val isHls = currentUrlToTry.contains(".m3u8")
                 if (!isHls && resumePosMs > 0) {
                     try {
@@ -655,6 +666,10 @@ class AudioEngine {
                     } catch (_: Exception) {}
                 }
                 val f = try { newG.grabSamples() } catch (_: Exception) { null }
+                if (stopFlag || activeWorkerId != workerId) {
+                    newG.releaseQuietly()
+                    break
+                }
                 if (f != null) {
                     val samples = f.samples
                     if (samples != null) {
@@ -704,7 +719,7 @@ class AudioEngine {
                 // about the deadline). Re-resolve and retry a couple of times before handing the
                 // failure up: the owner's own error path is a full teardown and reload.
                 Logger.e("AudioEngine", "Initial open failed (${e.message}); recovering")
-                val recovered = recoverStream(opening, activeUrl, headers, positionMs, INITIAL_OPEN_ATTEMPTS)
+                val recovered = recoverStream(workerId, opening, activeUrl, headers, positionMs, INITIAL_OPEN_ATTEMPTS)
                 grabber = recovered.first ?: throw e
                 recovered.second?.let { activeUrl = it }
             }
@@ -787,12 +802,14 @@ class AudioEngine {
                         }
 
                         val recovered = recoverStream(
+                            workerId,
                             grabber,
                             activeUrl,
                             headers,
                             seek,
                             maxAttempts = if (warmUpRequested) WARM_UP_RECOVERY_ATTEMPTS else Int.MAX_VALUE,
                         )
+                        if (stopFlag || activeWorkerId != workerId) return
                         if (recovered.first != null) {
                             grabber = recovered.first
                             if (recovered.second != null) activeUrl = recovered.second!!
@@ -865,6 +882,7 @@ class AudioEngine {
                     Logger.e("AudioEngine", "Read error from grabber: ${e.message}")
                     frame = null
                 }
+                if (stopFlag || activeWorkerId != workerId) return
 
                 if (frame == null) {
                     if (!stopFlag && activeWorkerId == workerId) {
@@ -878,7 +896,8 @@ class AudioEngine {
                                 "AudioEngine",
                                 "Premature EOF/error at $positionMs ms (duration=$durationMs ms). Recovering stream..."
                             )
-                            val recovered = recoverStream(grabber, activeUrl, headers, positionMs)
+                            val recovered = recoverStream(workerId, grabber, activeUrl, headers, positionMs)
+                            if (stopFlag || activeWorkerId != workerId) return
                             if (recovered.first != null) {
                                 grabber = recovered.first
                                 if (recovered.second != null) activeUrl = recovered.second!!

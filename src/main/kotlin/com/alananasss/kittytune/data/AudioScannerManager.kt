@@ -28,24 +28,15 @@ object AudioScannerManager {
     private external fun nativeGetAnalyzedTruePeakDb(handle: Long): Float
 
     fun scanAudioFile(file: File): TrackLoudnessInfo? {
-        if (!file.exists()) return null
+        if (!file.isFile || file.length() == 0L) return null
         return scanSource(file.absolutePath)
     }
 
-    fun scanStream(url: String, headers: Map<String, String> = emptyMap()): TrackLoudnessInfo? {
-        return scanSource(url, headers)
-    }
-
-    private fun scanSource(source: String, headers: Map<String, String> = emptyMap()): TrackLoudnessInfo? {
+    private fun scanSource(source: String): TrackLoudnessInfo? {
         var grabber: FFmpegFrameGrabber? = null
         var analyzer: Long = 0L
         try {
             grabber = FFmpegFrameGrabber(source).apply {
-                if (headers.isNotEmpty()) {
-                    val headerBlob = headers.entries.joinToString("\r\n") { "${it.key}: ${it.value}" }
-                    setOption("headers", headerBlob + "\r\n")
-                }
-                setOption("timeout", "5000000") // 5s timeout
                 sampleRate = 44100
                 audioChannels = 2
                 sampleMode = FrameGrabber.SampleMode.FLOAT

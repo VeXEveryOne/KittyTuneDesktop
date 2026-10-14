@@ -140,7 +140,7 @@ object MusicManager {
                 player.activeEngine.setTrackLoudness(cached.integratedLufs, cached.truePeakDb)
             } else {
                 player.activeEngine.clearTrackLoudness()
-                TrackLoudnessRepository.scanTrackAsync(track, url, headers) { scanned ->
+                TrackLoudnessRepository.scanTrackAsync(track, url) { scanned ->
                     if (currentTrack?.id == track.id) {
                         player.activeEngine.setTrackLoudness(scanned.integratedLufs, scanned.truePeakDb)
                     }

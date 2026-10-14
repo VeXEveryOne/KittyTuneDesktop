@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.alananasss"
-version = "1.4.10"
+version = "1.4.11"
 
 // Each version has its own package directory, so a build cannot overwrite a running release.
 val desktopDistributionDirectory = layout.buildDirectory.dir("compose/binaries/${project.version}")
@@ -421,7 +421,8 @@ tasks.register<Test>("headlessTest") {
             "PlayerRemainingTimeTest", "PlaylistTotalDurationTest", "SettingsSearchTest", "ConnectNetworkStateTest", "ConnectRefactorTest",
             "VolumeCurveTest", "TrackTrimTest", "TrimTimeParseTest", "SyncMergeTest", "SyncPlaybackTest", "ConnectWireTest", "ConnectSocketListenerTest", "ConnectHandoffTest",
             "WindowBoundsRestorationTest", "TextFieldShortcutGuardTest", "PaletteCacheTest", "PeakLimiterTest",
-            "WindowsNativeDspTest", "DesktopRenderTest", "DesktopDensityTest"
+            "WindowsNativeDspTest", "DesktopRenderTest", "DesktopDensityTest", "TrackLoudnessScanTest",
+            "HlsPlaybackStartupTest", "HlsStreamAdapterRefreshTest", "AudioRecoveryCancellationTest"
         ).forEach(::includeTestsMatching)
     }
 }

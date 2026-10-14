@@ -1,12 +1,14 @@
 # KittyTune for Windows
 
-This community build is version 1.4.10, based on KittyTuneDesktop 1.4.1 with the original Material 3 Expressive interface, Windows build fixes and Connect support. Source provenance is in [UPSTREAM.md](UPSTREAM.md).
+This community build is version 1.4.11, based on KittyTuneDesktop 1.4.1 with the original Material 3 Expressive interface, Windows build fixes and Connect support. Source provenance is in [UPSTREAM.md](UPSTREAM.md).
 
 ## Run the portable version
 
-Extract `release/KittyTune-1.4.10-Windows-Portable-x64.zip` into a writable folder and open **`KittyTune/KittyTune.exe`**. Keep the `app` and `runtime` folders beside the executable. Java is included; Android Studio and an emulator are not needed.
+Extract `release/KittyTune-1.4.11-Windows-Portable-x64.zip` into a writable folder and open **`KittyTune/KittyTune.exe`**. Keep the `app` and `runtime` folders beside the executable. Java is included; Android Studio and an emulator are not needed.
 
 To switch from a running older build, use **Exit** in its tray menu first. Closing its window may leave the old version running; single-instance handling would then reopen that old process instead of starting the new build. Settings stay in the same profile.
+
+Version 1.4.11 fixes playback stuck on loading: background loudness analysis uses completed local files, HLS starts without reading the whole track for its size, and obsolete network recovery exits when switching tracks.
 
 On first launch choose guest mode or connect SoundCloud. Search, local files, playlists, favorites, queue, lyrics, audio effects, the tray player and Windows media buttons come from the upstream native app. Service availability still depends on the relevant provider and account. Windows remains an experimental platform upstream.
 
@@ -32,7 +34,7 @@ Individual commands, with `JAVA_HOME` pointing at JDK 21+:
 .\gradlew.bat zipWindowsPortable --no-daemon
 ```
 
-The unpacked application is under `build/compose/binaries/1.4.10/main-release/app/KittyTune/`. Packaging uses a separate directory for each version so it does not overwrite an older running release.
+The unpacked application is under `build/compose/binaries/1.4.11/main-release/app/KittyTune/`. Packaging uses a separate directory for each version so it does not overwrite an older running release.
 To produce an MSI instead, use `packageReleaseMsi` (requires the Windows packaging tools used by jpackage).
 
 Do not use `run` or the upstream interactive window tests during a background build. The dedicated `headlessTest` task uses a separate profile under `build/test-profile` and an explicit selection of noninteractive tests.
